@@ -46,6 +46,8 @@ export default function TransformView() {
   const [total, setTotal] = useState(0)
   const [errorMessage, setErrorMessage] = useState('')
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [convertTemplate, setConvertTemplate] = useState('')
+  const [convertResult, setConvertResult] = useState<{ ok: boolean; message: string; entry?: Record<string, any> } | null>(null)
   const filterFields = useMemo(() => columns.slice(0, 3), [])
 
   const reload = useCallback(async () => {
@@ -81,6 +83,28 @@ export default function TransformView() {
       await reload()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '数据加工转换操作失败')
+    }
+  }
+
+  async function convertWithTemplate(row: Row) {
+    setErrorMessage('')
+    setConvertResult(null)
+    if (!convertTemplate.trim()) {
+      setErrorMessage('请先填写要引用的数据模板')
+      return
+    }
+    try {
+      const response = await request(`${ENDPOINT}/${row.id}/convert`, {
+        method: 'POST',
+        body: JSON.stringify({ values: { 数据模板: convertTemplate.trim() } }),
+      })
+      const payload = await response.json()
+      setConvertResult({ ok: Boolean(payload.ok), message: payload.message ?? '转换结果未知', entry: payload.entry ?? undefined })
+      if (payload.ok) {
+        await reload()
+      }
+    } catch (error) {
+      setConvertResult({ ok: false, message: error instanceof Error ? error.message : '引用模板转换失败' })
     }
   }
 
@@ -125,6 +149,35 @@ export default function TransformView() {
         <button className="btn ghost" type="button" onClick={() => setFilters({})}>重置条件</button>
       </form>
 
+      <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
+        <label className="filter-item">
+          <span>引用数据模板</span>
+          <input
+            value={convertTemplate}
+            placeholder="如：用户档案模板"
+            onChange={(event) => setConvertTemplate(event.target.value)}
+          />
+        </label>
+        <span className="page-desc">填写数据模拟服务的数据模板后，在规则行点击「引用模板转换」；格式或字段不匹配会被拒绝并说明差异。</span>
+      </form>
+
+      {convertResult && (
+        <div className="detail-panel">
+          <h3 className={convertResult.ok ? 'ok-text' : 'error-text'}>{convertResult.message}</h3>
+          {convertResult.ok && convertResult.entry && (
+            <>
+              <div className="detail-meta">
+                <span>数据模板：{convertResult.entry['数据模板']}</span>
+                <span>引用批次：{convertResult.entry['批次编号']}</span>
+                <span>输出格式：{convertResult.entry['输出格式']}</span>
+                <span>转换条数：{convertResult.entry['转换条数']}</span>
+              </div>
+              <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{convertResult.entry['输出预览']}</pre>
+            </>
+          )}
+        </div>
+      )}
+
       <table className="data-table">
         <thead>
           <tr>
@@ -142,6 +195,7 @@ export default function TransformView() {
                     {action}
                   </button>
                 ))}
+                <button className="link" type="button" onClick={() => void convertWithTemplate(row)}>引用模板转换</button>
               </td>
             </tr>
           ))}

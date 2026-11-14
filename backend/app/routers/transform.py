@@ -58,6 +58,15 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
+@router.post("/{entry_id}/convert", response_model=ActionResult)
+def convert_with_template(entry_id: int, payload: EntryPayload) -> ActionResult:
+    """引用数据模拟服务的数据模板做转换；格式或字段不匹配时拒绝并说明差异。"""
+    result, message = service.convert_with_template(entry_id, payload.values)
+    if result is None:
+        return ActionResult(ok=False, message=message)
+    return ActionResult(ok=True, message=message, entry=result)
+
+
 @router.get("/export")
 def export_entries() -> dict[str, Any]:
     """导出数据加工转换清单：返回当前过滤条件下的全量数据。"""
